@@ -9,10 +9,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
-RUN npm prune --omit=dev
 
 EXPOSE 8080
 CMD sh -c 'echo $GOOGLE_CREDENTIALS_BASE64 | base64 -d > /app/credentials.json && npm run start'
