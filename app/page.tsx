@@ -114,7 +114,8 @@ export default function Home() {
         if (data.error) throw new Error(data.error)
         fields.forEach((span, j) => { if (data.translated[j] !== undefined) span.textContent = data.translated[j] })
         rotated.forEach((el, j) => { const idx = fields.length + j; if (data.translated[idx] !== undefined) { el.setAttribute('data-text', data.translated[idx]); el.setAttribute('title', data.translated[idx]) } })
-        translatedPages.push(doc.body.innerHTML)
+        const wrapper = doc.querySelector('div') || doc.body
+        translatedPages.push(wrapper.outerHTML)
       }
       setPages(translatedPages)
       setStatus('Translated to ' + language + ' successfully')

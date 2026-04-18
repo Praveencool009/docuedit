@@ -4,7 +4,6 @@ RUN apt-get update && apt-get install -y \
     mupdf-tools \
     python3 \
     python3-pip \
-    ghostscript \
     && pip3 install pymupdf --break-system-packages \
     && rm -rf /var/lib/apt/lists/*
 
@@ -16,4 +15,4 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 EXPOSE 8080
-CMD ["npm", "run", "start"]
+CMD sh -c 'echo $GOOGLE_CREDENTIALS_BASE64 | base64 -d > /app/credentials.json && npm run start'
