@@ -1,7 +1,6 @@
-import type { NextConfig } from "next";
-
+import type { NextConfig } from 'next'
 const nextConfig: NextConfig = {
-  /* config options here */
-};
-
-export default nextConfig;
+  turbopack: {},
+  serverExternalPackages: ['canvas', 'sharp', '@google-cloud/documentai']
+}
+export default nextConfig
