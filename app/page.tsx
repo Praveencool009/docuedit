@@ -1,6 +1,7 @@
 'use client'
 import { useRef, useState, useEffect } from 'react'
 import jsPDF from 'jspdf'
+import { Document, Packer, Paragraph, TextRun } from 'docx'
 import html2canvas from 'html2canvas'
 
 const LANGUAGES = ['English','Korean','Japanese','Spanish','French','Chinese','Arabic','Hindi','Tamil','German','Italian','Portuguese','Russian','Turkish']
@@ -19,6 +20,7 @@ export default function Home() {
   const [isError, setIsError] = useState(false)
   const [loading, setLoading] = useState(false)
   const [language, setLanguage] = useState('English')
+  const [renderKey, setRenderKey] = useState(0)
   const [popup, setPopup] = useState<Popup | null>(null)
   const [popupText, setPopupText] = useState('')
   const previewRef = useRef<HTMLDivElement>(null)
@@ -112,12 +114,16 @@ export default function Home() {
         const res = await fetch('/api/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texts, targetLanguage: language }) })
         const data = await res.json()
         if (data.error) throw new Error(data.error)
+        console.log('texts count:', texts.length, 'translated count:', data.translated?.length)
+        console.log('sample translated:', data.translated?.slice(0,2))
         fields.forEach((span, j) => { if (data.translated[j] !== undefined) span.textContent = data.translated[j] })
         rotated.forEach((el, j) => { const idx = fields.length + j; if (data.translated[idx] !== undefined) { el.setAttribute('data-text', data.translated[idx]); el.setAttribute('title', data.translated[idx]) } })
-        const wrapper = doc.querySelector('div') || doc.body
-        translatedPages.push(wrapper.outerHTML)
+        const newHtml = doc.body.firstElementChild ? doc.body.firstElementChild.outerHTML : doc.body.innerHTML
+        console.log('new html length:', newHtml.length)
+        translatedPages.push(newHtml)
       }
-      setPages(translatedPages)
+      setPages([...translatedPages])
+      setRenderKey(k => k + 1)
       setStatus('Translated to ' + language + ' successfully')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -137,8 +143,14 @@ export default function Home() {
       const ph = pdf.internal.pageSize.getHeight()
       for (let i = 0; i < pages.length; i++) {
         setCurrentPage(i)
-        await new Promise(r => setTimeout(r, 300))
-        const canvas = await html2canvas(previewRef.current!, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
+        await new Promise(r => setTimeout(r, 400))
+        const canvas = await html2canvas(previewRef.current!, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          allowTaint: true
+        })
         const imgData = canvas.toDataURL('image/jpeg', 0.95)
         if (i > 0) pdf.addPage()
         pdf.addImage(imgData, 'JPEG', 0, 0, pw, ph)
@@ -158,15 +170,68 @@ export default function Home() {
     setLoading(true)
     setStatus('Generating Word document...')
     try {
-      const canvas = await html2canvas(previewRef.current!, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
-      const imgData = canvas.toDataURL('image/png', 1.0)
-      const base64 = imgData.split(',')[1]
-      const wordHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;"><img src="data:image/png;base64,' + base64 + '" style="width:100%;" /></body></html>'
-      const blob = new Blob([wordHtml], { type: 'application/msword' })
-      const url = URL.createObjectURL(blob)
+      const fields = previewRef.current.querySelectorAll('[data-field]')
+      const children: any[] = []
+
+      let prevY = -1
+      let currentPara: any[] = []
+
+      fields.forEach((el) => {
+        const div = el as HTMLDivElement
+        const text = div.textContent || ''
+        if (!text.trim()) return
+
+        const top = parseInt(div.style.top) || 0
+        const fontSize = parseInt(div.style.fontSize) || 12
+        const bold = div.style.fontWeight === 'bold'
+        const color = div.style.color || '#000000'
+
+        let hexColor = '000000'
+        if (color.startsWith('#')) {
+          hexColor = color.replace('#', '')
+        } else if (color.startsWith('rgb')) {
+          const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)
+          if (match) {
+            hexColor = [match[1], match[2], match[3]].map(n => parseInt(n).toString(16).padStart(2, '0')).join('')
+          }
+        }
+
+        const run = new TextRun({
+          text,
+          bold,
+          size: fontSize * 2,
+          color: hexColor === '000000' ? undefined : hexColor
+        })
+
+        if (prevY === -1 || Math.abs(top - prevY) > 5) {
+          if (currentPara.length > 0) {
+            children.push(new Paragraph({ children: currentPara }))
+            currentPara = []
+          }
+          prevY = top
+        } else {
+          currentPara.push(new TextRun({ text: ' ', size: fontSize * 2 }))
+        }
+        currentPara.push(run)
+      })
+
+      if (currentPara.length > 0) {
+        children.push(new Paragraph({ children: currentPara }))
+      }
+
+      if (children.length === 0) {
+        children.push(new Paragraph({ children: [new TextRun({ text: 'No text found' })] }))
+      }
+
+      const doc = new Document({
+        sections: [{ children }]
+      })
+
+      const buffer = await Packer.toBlob(doc)
+      const url = URL.createObjectURL(buffer)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'texbee-document.doc'
+      a.download = 'texbee-document.docx'
       a.click()
       URL.revokeObjectURL(url)
       setStatus('Word document downloaded!')
@@ -229,7 +294,7 @@ export default function Home() {
           </div>
         )}
         {pages.length > 0 && (
-          <div ref={previewRef} style={{ background: 'white', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', borderRadius: 4 }} dangerouslySetInnerHTML={{ __html: pages[currentPage] }} />
+          <div key={renderKey + '-' + currentPage} ref={previewRef} style={{ background: 'white', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', borderRadius: 4 }} dangerouslySetInnerHTML={{ __html: pages[currentPage] }} />
         )}
         {popup && (
           <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', left: Math.min(popup.x, window.innerWidth - 320), top: popup.y, zIndex: 9999, background: cream, border: '1px solid ' + taupeAccent, borderRadius: 8, padding: 14, boxShadow: '0 4px 20px rgba(0,0,0,0.3)', width: 300 }}>
