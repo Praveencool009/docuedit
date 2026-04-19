@@ -173,62 +173,28 @@ export default function Home() {
       const fields = previewRef.current.querySelectorAll('[data-field]')
       const children: any[] = []
 
-      let prevY = -1
-      let currentPara: any[] = []
-
       fields.forEach((el) => {
         const div = el as HTMLDivElement
         const text = div.textContent || ''
         if (!text.trim()) return
-
-        const top = parseInt(div.style.top) || 0
-        const fontSize = parseInt(div.style.fontSize) || 12
+        const fontSize = Math.max(8, parseInt(div.style.fontSize) || 12)
         const bold = div.style.fontWeight === 'bold'
-        const color = div.style.color || '#000000'
-
-        let hexColor = '000000'
-        if (color.startsWith('#')) {
-          hexColor = color.replace('#', '')
-        } else if (color.startsWith('rgb')) {
-          const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)
-          if (match) {
-            hexColor = [match[1], match[2], match[3]].map(n => parseInt(n).toString(16).padStart(2, '0')).join('')
-          }
-        }
-
-        const run = new TextRun({
-          text,
-          bold,
-          size: fontSize * 2,
-          color: hexColor === '000000' ? undefined : hexColor
-        })
-
-        if (prevY === -1 || Math.abs(top - prevY) > 5) {
-          if (currentPara.length > 0) {
-            children.push(new Paragraph({ children: currentPara }))
-            currentPara = []
-          }
-          prevY = top
-        } else {
-          currentPara.push(new TextRun({ text: ' ', size: fontSize * 2 }))
-        }
-        currentPara.push(run)
+        children.push(new Paragraph({
+          children: [new TextRun({
+            text: text.trim(),
+            bold,
+            size: Math.round(fontSize * 1.5)
+          })]
+        }))
       })
-
-      if (currentPara.length > 0) {
-        children.push(new Paragraph({ children: currentPara }))
-      }
 
       if (children.length === 0) {
-        children.push(new Paragraph({ children: [new TextRun({ text: 'No text found' })] }))
+        children.push(new Paragraph({ children: [new TextRun({ text: 'No text content found' })] }))
       }
 
-      const doc = new Document({
-        sections: [{ children }]
-      })
-
-      const buffer = await Packer.toBlob(doc)
-      const url = URL.createObjectURL(buffer)
+      const doc = new Document({ sections: [{ children }] })
+      const blob = await Packer.toBlob(doc)
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = 'texbee-document.docx'
@@ -242,7 +208,6 @@ export default function Home() {
     }
     setLoading(false)
   }
-
   const taupe = '#4a3728'
   const taupeLight = '#6b5242'
   const taupeAccent = '#c4a882'
