@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const { texts, targetLanguage } = await req.json()
     if (!texts || !targetLanguage) return Response.json({ error: 'Missing data' }, { status: 400 })
 
-    const batchSize = 30
+    const batchSize = 20
     const translated: string[] = []
 
     for (let i = 0; i < texts.length; i += batchSize) {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
             max_tokens: 4000,
             messages: [{
               role: 'user',
-              content: 'Translate each item in this JSON array to ' + targetLanguage + '. Return ONLY a valid JSON array with the same number of items. Each item must be translated. No explanation, no markdown, no code fences. Input: ' + JSON.stringify(batch)
+              content: 'Translate each item in this JSON array to ' + targetLanguage + '. Preserve all formatting, numbers, dates, proper nouns. Return ONLY a valid JSON array with same number of items. No explanation, no markdown. Input: ' + JSON.stringify(batch)
             }]
           })
           const raw = response.content[0].type === 'text' ? response.content[0].text.trim() : '[]'
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
           await new Promise(r => setTimeout(r, 1000))
         }
       }
-      if (i + batchSize < texts.length) await new Promise(r => setTimeout(r, 300))
+      if (i + batchSize < texts.length) await new Promise(r => setTimeout(r, 200))
     }
 
     return Response.json({ translated })
